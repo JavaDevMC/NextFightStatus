@@ -1,7 +1,6 @@
-package com.maximde.plugin;
+package com.maximde.serverstatus;
 
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.wm.ToolWindowAnchor;
 import com.intellij.openapi.wm.ToolWindowFactory;
@@ -10,78 +9,58 @@ import com.intellij.ui.content.ContentFactory;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import javax.imageio.ImageIO;
+
 import javax.swing.*;
-import java.awt.image.BufferedImage;
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.net.URL;
+import java.awt.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
 
 public class ToolWindow implements ToolWindowFactory {
+
+    private static final String SERVER_ADRESS = "nextfight.net";
 
     @Override
     public boolean isApplicable(@NotNull Project project) {
         return ToolWindowFactory.super.isApplicable(project);
     }
 
+
     @Override
     public void createToolWindowContent(@NotNull Project project, com.intellij.openapi.wm.@NotNull ToolWindow toolWindow) {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.PAGE_AXIS));
 
-        // Ping the Minecraft server and get player count and logo
-        int playerCount = getPlayerCount("nextfight.net");
-        ImageIcon logo = getLogo("nextfight.net");
-
-        // Add player count label and logo to panel
-        JLabel playerCountLabel = new JLabel("Player count: " + playerCount);
+        // Create labels for player count and logo
+        JLabel playerCountLabel = new JLabel();
+        playerCountLabel.setFont(new Font("Arial", Font.BOLD, 24));
+        playerCountLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         panel.add(playerCountLabel);
-        JLabel logoLabel = new JLabel(logo);
+
+        JLabel logoLabel = new JLabel();
+        logoLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         panel.add(logoLabel);
 
-        // Set tool window content
+        ImageIcon logo = ServerData.getLogo(SERVER_ADRESS);
+        int maxPlayerCount = ServerData.getPlayerCountMax(SERVER_ADRESS);
+        /*
+            Update server data every minute
+         */
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+        scheduler.scheduleAtFixedRate(() -> {
+            int playerCount = ServerData.getPlayerCount(SERVER_ADRESS);
+
+            String playerCountString = playerCount + "/" + maxPlayerCount;
+            playerCountLabel.setText(playerCountString);
+            logoLabel.setIcon(logo);
+        }, 0, 30, TimeUnit.SECONDS);
+
+
         ContentFactory contentFactory = ContentFactory.SERVICE.getInstance();
         Content content = contentFactory.createContent(panel, "", false);
         toolWindow.getContentManager().addContent(content);
-    }
 
-    private int getPlayerCount(String serverAddress) {
-        String apiUrl = "https://eu.mc-api.net/v3/server/ping/" + serverAddress;
-        try {
-            URL url = new URL(apiUrl);
-            BufferedReader reader = new BufferedReader(new InputStreamReader(url.openStream()));
-            JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
-            return json.getAsJsonObject("players").get("online").getAsInt();
-        } catch (IOException e) {
-            e.printStackTrace();
-            return 0;
-        }
-    }
-
-    private int getPlayerCountMax(String serverAddress) {
-        String apiUrl = "https://eu.mc-api.net/v3/server/ping/" + serverAddress;
-        try {
-            URL url = new URL(apiUrl);
-            BufferedReader reader = new BufferedReader(new InputStreamReader(url.openStream()));
-            JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
-            return json.getAsJsonObject("players").get("max").getAsInt();
-        } catch (IOException e) {
-            e.printStackTrace();
-            return 0;
-        }
-    }
-
-    private ImageIcon getLogo(String serverAdress) {
-        String serverIconUrl = "https://eu.mc-api.net/v3/server/favicon/"+serverAdress;
-        try {
-            URL url = new URL(serverIconUrl);
-            BufferedImage image = ImageIO.read(url);
-            return new ImageIcon(image);
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
-        }
     }
 
 
@@ -97,7 +76,7 @@ public class ToolWindow implements ToolWindowFactory {
 
     @Override
     public boolean isDoNotActivateOnStart() {
-        return ToolWindowFactory.super.isDoNotActivateOnStart();
+        return false;
     }
 
     @Nullable
@@ -107,7 +86,7 @@ public class ToolWindow implements ToolWindowFactory {
     }
 
     @Override
-    public @Nullable Icon getIcon() {
-        return ToolWindowFactory.super.getIcon();
+    public Icon getIcon() {
+        return new ImageIcon(getClass().getResource("/META-INF/logo_16.png"));
     }
 }
